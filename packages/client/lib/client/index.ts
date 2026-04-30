@@ -27,6 +27,13 @@ import { trace, sanitizeArgs, publish, CHANNELS, type CommandTraceContext } from
 
 const noop = () => {};
 
+export interface OfflineQueueRejectionEntry {
+  command: string;
+  argsLength: number;
+  timestamp: number;
+  clientState: { isOpen: boolean; isReady: boolean };
+}
+
 export interface RedisClientOptions<
   M extends RedisModules = RedisModules,
   F extends RedisFunctions = RedisFunctions,
@@ -76,6 +83,13 @@ export interface RedisClientOptions<
    * When `false`, commands are queued for execution after reconnection.
    */
   disableOfflineQueue?: boolean;
+  /**
+   * Called whenever a command is rejected because `disableOfflineQueue` is `true`
+   * and the client is not yet ready. Receives a structured entry describing the
+   * rejected command. Any error thrown by the hook is swallowed and does not
+   * affect the rejection behavior.
+   */
+  offlineQueueRejectionHook?: (entry: OfflineQueueRejectionEntry) => void;
   /**
    * Connect in [`READONLY`](https://redis.io/commands/readonly) mode
    */
@@ -1178,6 +1192,22 @@ export default class RedisClient<
           !this._self.#socket.isReady &&
           this._self.#options.disableOfflineQueue
         ) {
+          const hook = this._self.#options.offlineQueueRejectionHook;
+          if (hook) {
+            try {
+              hook({
+                command: String(args[0]).toUpperCase(),
+                argsLength: args.length,
+                timestamp: Date.now(),
+                clientState: {
+                  isOpen: this._self.#socket.isOpen,
+                  isReady: this._self.#socket.isReady
+                }
+              });
+            } catch {
+              // swallow hook errors
+            }
+          }
           return Promise.reject(new ClientOfflineError());
         }
 

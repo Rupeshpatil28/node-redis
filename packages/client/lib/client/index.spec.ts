@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import testUtils, { GLOBAL, waitTillBeenCalled } from '../test-utils';
-import RedisClient, { RedisClientOptions, RedisClientType } from '.';
+import RedisClient, { RedisClientOptions, RedisClientType, OfflineQueueRejectionEntry } from '.';
 import { AbortError, ClientClosedError, ClientOfflineError, ConnectionTimeoutError, DisconnectsClientError, ErrorReply, MultiErrorReply, TimeoutError, WatchError } from '../errors';
 import { defineScript } from '../lua-script';
 import { spy, stub } from 'sinon';
@@ -1061,6 +1061,66 @@ describe('Client', () => {
       disableOfflineQueue: true
     },
     disableClientSetup: true
+  });
+
+  describe('offlineQueueRejectionHook', () => {
+    const hookSpy = spy<(entry: OfflineQueueRejectionEntry) => void>(() => {});
+
+    let throwingHookCallCount = 0;
+    const throwingHook = (_entry: OfflineQueueRejectionEntry) => {
+      throwingHookCallCount++;
+      throw new Error('hook error');
+    };
+
+    const noopHook = spy<(entry: OfflineQueueRejectionEntry) => void>(() => {});
+
+    testUtils.testWithClient('should invoke hook with correct payload when command is rejected due to disableOfflineQueue', async client => {
+      hookSpy.resetHistory();
+      const connectPromise = client.connect();
+      await assert.rejects(client.ping(), ClientOfflineError);
+      assert.equal(hookSpy.callCount, 1);
+      const entry: OfflineQueueRejectionEntry = hookSpy.firstCall.args[0];
+      assert.equal(entry.command, 'PING');
+      assert.equal(entry.argsLength, 1);
+      assert.equal(typeof entry.timestamp, 'number');
+      assert.deepEqual(entry.clientState, { isOpen: true, isReady: false });
+      await connectPromise;
+      await client.disconnect();
+    }, {
+      ...GLOBAL.SERVERS.OPEN,
+      clientOptions: {
+        disableOfflineQueue: true,
+        offlineQueueRejectionHook: hookSpy
+      },
+      disableClientSetup: true
+    });
+
+    testUtils.testWithClient('should swallow hook errors and still reject with ClientOfflineError', async client => {
+      throwingHookCallCount = 0;
+      const connectPromise = client.connect();
+      await assert.rejects(client.ping(), ClientOfflineError);
+      assert.equal(throwingHookCallCount, 1);
+      await connectPromise;
+      await client.disconnect();
+    }, {
+      ...GLOBAL.SERVERS.OPEN,
+      clientOptions: {
+        disableOfflineQueue: true,
+        offlineQueueRejectionHook: throwingHook
+      },
+      disableClientSetup: true
+    });
+
+    testUtils.testWithClient('should not invoke hook when disableOfflineQueue is false', async client => {
+      noopHook.resetHistory();
+      await client.ping();
+      assert.equal(noopHook.callCount, 0);
+    }, {
+      ...GLOBAL.SERVERS.OPEN,
+      clientOptions: {
+        offlineQueueRejectionHook: noopHook
+      }
+    });
   });
 
   describe('MONITOR', () => {
