@@ -1195,8 +1195,11 @@ export default class RedisClient<
           const hook = this._self.#options.offlineQueueRejectionHook;
           if (hook) {
             try {
+              const commandName = typeof args[0] === 'string' ?
+                args[0] :
+                Buffer.isBuffer(args[0]) ? args[0].toString() : String(args[0]);
               hook({
-                command: String(args[0]).toUpperCase(),
+                command: commandName.toUpperCase(),
                 argsLength: args.length,
                 timestamp: Date.now(),
                 clientState: {
