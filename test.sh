@@ -40,11 +40,11 @@ if [[ -z "$OUTPUT_PATH" ]]; then
   exit 1
 fi
 
-# Resolve output path to an absolute path
-OUTPUT_PATH="$(realpath -m "$OUTPUT_PATH")"
-
 # Ensure output directory exists
-mkdir -p "$(dirname "$OUTPUT_PATH")"
+OUTPUT_DIR="$(dirname "$OUTPUT_PATH")"
+mkdir -p "$OUTPUT_DIR"
+OUTPUT_DIR="$(realpath "$OUTPUT_DIR")"
+OUTPUT_PATH="$OUTPUT_DIR/$(basename "$OUTPUT_PATH")"
 
 cd "$(dirname "$0")/packages/client"
 
