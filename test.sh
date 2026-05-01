@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test.sh – Mars test harness for the offlineQueueRejectionHook feature.
+# test.sh – test harness for the offlineQueueRejectionHook feature.
 #
 # Usage:
 #   ./test.sh --mode base|new --output_path <path>

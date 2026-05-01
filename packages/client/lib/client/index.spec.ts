@@ -1074,8 +1074,13 @@ describe('Client', () => {
 
     const noopHook = spy<(entry: OfflineQueueRejectionEntry) => void>(() => {});
 
-    testUtils.testWithClient('should invoke hook with correct payload when command is rejected due to disableOfflineQueue', async client => {
+    beforeEach(() => {
       hookSpy.resetHistory();
+      noopHook.resetHistory();
+      throwingHookCallCount = 0;
+    });
+
+    testUtils.testWithClient('should invoke hook with correct payload when command is rejected due to disableOfflineQueue', async client => {
       const connectPromise = client.connect();
       await assert.rejects(client.ping(), ClientOfflineError);
       assert.equal(hookSpy.callCount, 1);
@@ -1096,7 +1101,6 @@ describe('Client', () => {
     });
 
     testUtils.testWithClient('should swallow hook errors and still reject with ClientOfflineError', async client => {
-      throwingHookCallCount = 0;
       const connectPromise = client.connect();
       await assert.rejects(client.ping(), ClientOfflineError);
       assert.equal(throwingHookCallCount, 1);
@@ -1112,7 +1116,6 @@ describe('Client', () => {
     });
 
     testUtils.testWithClient('should not invoke hook when disableOfflineQueue is false', async client => {
-      noopHook.resetHistory();
       await client.ping();
       assert.equal(noopHook.callCount, 0);
     }, {
